@@ -39,7 +39,7 @@ OPTIONS:
 	-h, --help	display this message
 	-o <file>	output results to <file>
 	-f <format>	set output format to <format>, currently supported:
-   			csv.
+   			csv junitxml
 EOF
 }
 
@@ -76,10 +76,20 @@ done
 shift $((OPTIND-1))
 
 # Init logging
+cukinia_epoch=$(date +%s)
 case "$__log_format" in
 csv)
 	echo "TEST MESSAGE, RESULT" >"$__log_file"
 	;;
+
+junitxml)
+	if [ "$__log_file" = "/dev/stdout" ]; then
+		usage
+		echo "Fatal: junitxml requires -o <file>"
+		exit 1
+	fi
+	;;
+
 *)
 	: >"$__log_file"
 	;;
@@ -147,6 +157,13 @@ cukinia_log()
 			echo "'$message',$result" >>"$__log_file"
 		fi
 		;;
+
+	junitxml)
+		if [ "$result" = "PASS" ] || [ "$result" = "FAIL" ]; then
+			_junitxml_add "$message" "$result"
+		fi
+		;;
+
 	*)
 		echo "${__log_pfx}$*" >>"$__log_file"
 		;;
@@ -274,7 +291,7 @@ _cukinia_result()
 	esac
 
 	case "$__log_format" in
-	csv)
+	csv|junitxml)
 		cukinia_log "$__cukinia_cur_test" "$result"
 		;;
 	*)
@@ -427,6 +444,48 @@ _cukinia_mount()
 	return 0
 }
 
+_time_elapsed()
+{
+	local now=$(date +%s)
+
+	echo $((now - cukinia_epoch))
+}
+
+# Create junit-xml header
+_junitxml_start()
+{
+	cat <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites failures="$cukinia_failures" name="cukinia" tests="$cukinia_tests" time="$(_time_elapsed)" timestamp="$(date +%s)">
+EOF
+}
+
+# Create junit-xml footer
+_junitxml_end()
+{
+	echo "</testsuites>"
+}
+
+# Add a junit-xml entry
+_junitxml_add()
+{
+	local message="$1"
+	local result="$2"
+	local failure
+
+	if [ "$result" != "PASS" ]; then
+		failure="<failure message=\"failed\"><![CDATA[$message]]></failure>"
+	fi
+
+	cat >> "$__log_file".xml.tmp <<EOF
+  <testcase classname="theclass" name="somename" time="$(_time_elapsed)" timestamp="$(date +%s)">
+    $failure
+    <system-err><![CDATA[TODO: put stderr here]]></system-err>
+    <system-out><![CDATA[TODO: put stdout here]]></system-out>
+  </testcase>
+EOF
+}
+
 # _colorize: return colorized string
 # arg1: color name
 # arg2..: string
@@ -508,5 +567,12 @@ done
 cukinia_tests=0
 cukinia_failures=0
 cukinia_conf_include "$CUKINIA_CONF"
+
+# Create junitxml report
+if [ "$__log_format" = "junitxml" ]; then
+	_junitxml_start >"$__log_file".xml
+	cat "$__log_file".xml.tmp >> "$__log_file".xml
+	_junitxml_end >>"$__log_file".xml
+fi
 
 [ $cukinia_failures -eq 0 ] && exit 0 || exit 1
