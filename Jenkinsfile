@@ -16,6 +16,7 @@ pipeline {
         stage('Test') {
             steps {
                 sh 'echo Starting test'
+                sh 'ls -la tests/'
             }
         }
     }
