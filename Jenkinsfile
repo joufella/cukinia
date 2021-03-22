@@ -9,6 +9,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh 'echo Starting build'
+                sh 'ls -la'
             }
         }
 
