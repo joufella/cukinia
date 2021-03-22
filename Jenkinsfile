@@ -8,7 +8,7 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-                sh 'echo Starting build'
+                sh 'echo Starting build v2'
                 sh 'ls -la'
             }
         }
